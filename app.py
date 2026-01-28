@@ -46,10 +46,10 @@ col1, col2 = st.columns([2, 3])
 with col1:
     barcode_val = st.text_input("📦 Barcode (Optional)", help="Leave blank to skip barcode")
 with col2:
-    line1 = st.text_input("Line 1 (e.g., Address)")
-    line2 = st.text_input("Line 2 (e.g., City)")
-    line3 = st.text_input("Line 3 (e.g., Postal Code)")
-    line4 = st.text_input("Line 4 (e.g., Country)")
+    line1 = st.text_input("Line 1 (e.g., Address)", value="18 Wheels")
+    line2 = st.text_input("Line 2 (e.g., City)", value="Re-sticker")
+    line3 = st.text_input("Line 3 (e.g., Postal Code)", value="Completed")
+    line4 = st.text_input("Line 4 (e.g., Country)", value="")
 
 # Combine non-empty lines
 text_lines = [line.strip() for line in [line1, line2, line3, line4] if line.strip()]
@@ -63,7 +63,7 @@ if st.button("📄 Generate PDF"):
         h = st.session_state.label_height * inch
         c = canvas.Canvas(buffer, pagesize=(w, h))
 
-        TEXT_FONT_SIZE = 29  # Large and readable!
+        TEXT_FONT_SIZE = 29  # Large and readable for warehouse!
         BARCODE_HUMAN_FONT_SIZE = 14
 
         total_labels = st.session_state.batch_count
@@ -72,20 +72,22 @@ if st.button("📄 Generate PDF"):
             if label_idx > 0:
                 c.showPage()
 
-            y_position = h - 1.3 * inch  # Start near top
+            # Start drawing text from near the top
+            y_position = h - 1.3 * inch
 
             # --- Draw centered, large, bold text lines ---
             if text_lines:
                 for line in text_lines:
-                    if y_position < 0.8 * inch:  # Stop if too low (barcode needs space)
+                    # Allow text very close to bottom (only stop if overlapping barcode zone)
+                    if y_position < 0.25 * inch:
                         break
                     text_width = stringWidth(line, 'Helvetica-Bold', TEXT_FONT_SIZE)
                     x_centered = (w - text_width) / 2
                     c.setFont("Helvetica-Bold", TEXT_FONT_SIZE)
                     c.drawString(x_centered, y_position, line)
-                    y_position -= 0.72 * inch  # Spacing between lines
+                    y_position -= 0.68 * inch  # Adjusted spacing for 29pt
 
-            # --- Draw Barcode (centered horizontally, below text) ---
+            # --- Draw Barcode (centered below text, if provided) ---
             if barcode_val:
                 try:
                     barcode_obj = createBarcodeDrawing(
@@ -104,11 +106,11 @@ if st.button("📄 Generate PDF"):
                         barcode_obj.width = MAX_BARCODE_WIDTH
 
                     x_bc = (w - barcode_obj.width) / 2
-                    y_bc = max(0.7 * inch, y_position - 0.4 * inch)  # Ensure it doesn't overlap text
+                    y_bc = max(0.7 * inch, y_position - 0.3 * inch)
 
                     renderPDF.draw(barcode_obj, c, x_bc, y_bc)
 
-                    # Optional: human-readable barcode below bars
+                    # Human-readable barcode
                     human_text = barcode_val
                     text_w = stringWidth(human_text, 'Helvetica-Bold', BARCODE_HUMAN_FONT_SIZE)
                     c.setFont("Helvetica-Bold", BARCODE_HUMAN_FONT_SIZE)
