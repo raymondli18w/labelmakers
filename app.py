@@ -15,7 +15,7 @@ st.write("Create warehouse labels with optional barcode + 4-line address. Choose
 # === State Management ===
 if 'label_width' not in st.session_state:
     st.session_state.label_width = 4.0  # inches
-if 'label_height' not not in st.session_state:
+if 'label_height' not in st.session_state:
     st.session_state.label_height = 3.0
 if 'batch_count' not in st.session_state:
     st.session_state.batch_count = 1
