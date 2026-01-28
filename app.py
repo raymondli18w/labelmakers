@@ -3,8 +3,6 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
 from reportlab.graphics.barcode import createBarcodeDrawing
 from reportlab.graphics import renderPDF
-from reportlab.platypus import Paragraph
-from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from io import BytesIO
 
@@ -54,8 +52,7 @@ with col2:
     line4 = st.text_input("Line 4 (e.g., Country)")
 
 # Combine non-empty lines
-text_lines = [line1, line2, line3, line4]
-text_lines = [line.strip() for line in text_lines if line.strip()]
+text_lines = [line.strip() for line in [line1, line2, line3, line4] if line.strip()]
 
 if st.button("📄 Generate PDF"):
     if not barcode_val and not text_lines:
@@ -66,11 +63,8 @@ if st.button("📄 Generate PDF"):
         h = st.session_state.label_height * inch
         c = canvas.Canvas(buffer, pagesize=(w, h))
 
-        # Style setup
-        styles = getSampleStyleSheet()
-        normal_style = styles['Normal']
-        normal_style.fontSize = 10
-        normal_style.leading = 12
+        TEXT_FONT_SIZE = 16  # Large and readable!
+        BARCODE_HUMAN_FONT_SIZE = 12
 
         total_labels = st.session_state.batch_count
 
@@ -78,19 +72,20 @@ if st.button("📄 Generate PDF"):
             if label_idx > 0:
                 c.showPage()
 
-            y_cursor = h - 0.2 * inch  # Start near top
+            y_position = h - 0.3 * inch  # Start near top
 
-            # --- Draw Text Lines (top-aligned) ---
+            # --- Draw centered, large, bold text lines ---
             if text_lines:
                 for line in text_lines:
-                    if y_cursor < 0.3 * inch:
-                        break  # Avoid overflow
-                    para = Paragraph(line, normal_style)
-                    para.wrap(w - 0.4 * inch, h)
-                    para.drawOn(c, 0.2 * inch, y_cursor - 0.15 * inch)
-                    y_cursor -= 0.2 * inch  # Line spacing
+                    if y_position < 0.8 * inch:  # Stop if too low (barcode needs space)
+                        break
+                    text_width = stringWidth(line, 'Helvetica-Bold', TEXT_FONT_SIZE)
+                    x_centered = (w - text_width) / 2
+                    c.setFont("Helvetica-Bold", TEXT_FONT_SIZE)
+                    c.drawString(x_centered, y_position, line)
+                    y_position -= 0.32 * inch  # Spacing between lines
 
-            # --- Draw Barcode (centered below text, if provided) ---
+            # --- Draw Barcode (centered horizontally, below text) ---
             if barcode_val:
                 try:
                     barcode_obj = createBarcodeDrawing(
@@ -109,15 +104,15 @@ if st.button("📄 Generate PDF"):
                         barcode_obj.width = MAX_BARCODE_WIDTH
 
                     x_bc = (w - barcode_obj.width) / 2
-                    # Position below text or near vertical center if no text
-                    y_bc = max(0.8 * inch, h / 2 - 0.3 * inch)
+                    y_bc = max(0.7 * inch, y_position - 0.4 * inch)  # Ensure it doesn't overlap text
 
                     renderPDF.draw(barcode_obj, c, x_bc, y_bc)
 
-                    # Human-readable barcode value (optional, but useful)
-                    text_w = stringWidth(barcode_val, 'Helvetica', 10)
-                    c.setFont("Helvetica", 10)
-                    c.drawString((w - text_w) / 2, y_bc - 0.18 * inch, barcode_val)
+                    # Optional: human-readable barcode below bars
+                    human_text = barcode_val
+                    text_w = stringWidth(human_text, 'Helvetica-Bold', BARCODE_HUMAN_FONT_SIZE)
+                    c.setFont("Helvetica-Bold", BARCODE_HUMAN_FONT_SIZE)
+                    c.drawString((w - text_w) / 2, y_bc - 0.2 * inch, human_text)
 
                 except Exception as e:
                     st.error(f"Barcode error: {e}")
