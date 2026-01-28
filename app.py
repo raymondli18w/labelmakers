@@ -63,8 +63,8 @@ if st.button("📄 Generate PDF"):
         h = st.session_state.label_height * inch
         c = canvas.Canvas(buffer, pagesize=(w, h))
 
-        TEXT_FONT_SIZE = 16  # Large and readable!
-        BARCODE_HUMAN_FONT_SIZE = 12
+        TEXT_FONT_SIZE = 22  # Large and readable!
+        BARCODE_HUMAN_FONT_SIZE = 14
 
         total_labels = st.session_state.batch_count
 
@@ -72,7 +72,7 @@ if st.button("📄 Generate PDF"):
             if label_idx > 0:
                 c.showPage()
 
-            y_position = h - 0.3 * inch  # Start near top
+            y_position = h - 0.7 * inch  # Start near top
 
             # --- Draw centered, large, bold text lines ---
             if text_lines:
