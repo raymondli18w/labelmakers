@@ -63,7 +63,7 @@ if st.button("📄 Generate PDF"):
         h = st.session_state.label_height * inch
         c = canvas.Canvas(buffer, pagesize=(w, h))
 
-        TEXT_FONT_SIZE = 22  # Large and readable!
+        TEXT_FONT_SIZE = 29  # Large and readable!
         BARCODE_HUMAN_FONT_SIZE = 14
 
         total_labels = st.session_state.batch_count
@@ -72,7 +72,7 @@ if st.button("📄 Generate PDF"):
             if label_idx > 0:
                 c.showPage()
 
-            y_position = h - 0.7 * inch  # Start near top
+            y_position = h - 1.3 * inch  # Start near top
 
             # --- Draw centered, large, bold text lines ---
             if text_lines:
@@ -83,7 +83,7 @@ if st.button("📄 Generate PDF"):
                     x_centered = (w - text_width) / 2
                     c.setFont("Helvetica-Bold", TEXT_FONT_SIZE)
                     c.drawString(x_centered, y_position, line)
-                    y_position -= 0.32 * inch  # Spacing between lines
+                    y_position -= 0.72 * inch  # Spacing between lines
 
             # --- Draw Barcode (centered horizontally, below text) ---
             if barcode_val:
