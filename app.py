@@ -81,7 +81,6 @@ if st.button("📄 Generate PDF"):
         draw_barcode = bool(barcode_val) and not maximize_text
         total_labels = st.session_state.batch_count
         
-        # Variable to show final font size in success message
         final_font_size = 0
 
         for label_idx in range(total_labels):
@@ -95,9 +94,12 @@ if st.button("📄 Generate PDF"):
                 current_suffix = str(current_num)
 
             final_lines = []
-            if line1.strip(): final_lines.append(line1.strip())
-            if line2.strip(): final_lines.append(line2.strip())
-            if line3.strip(): final_lines.append(line3.strip())
+            if line1.strip():
+                final_lines.append(line1.strip())
+            if line2.strip():
+                final_lines.append(line2.strip())
+            if line3.strip():
+                final_lines.append(line3.strip())
             
             line4_content = line4_base.strip()
             if use_sequence:
@@ -116,11 +118,9 @@ if st.button("📄 Generate PDF"):
             
             if maximize_text and final_lines:
                 # === SAFE MAXIMIZE MODE ===
-                
-                # CRITICAL FIX: Increased horizontal margin to prevent cutoff
-                # Vertical margin kept small to allow text to grow tall
-                margin_x = 0.25 * inch  # Wider safe zone for left/right
-                margin_y = 0.05 * inch  # Tiny safe zone for top/bottom
+                # Increased horizontal margin to 0.25 to prevent printer cutoff
+                margin_x = 0.25 * inch
+                margin_y = 0.05 * inch
                 
                 available_w = w - (2 * margin_x)
                 available_h = h - (2 * margin_y)
