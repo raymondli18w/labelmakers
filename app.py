@@ -7,8 +7,8 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from io import BytesIO
 
 st.set_page_config(page_title="CustomLabel Generator", layout="wide")
-st.title("🖨️ Custom Label Generator (Fixed Max Fill)")
-st.write("Updated logic to aggressively fill the label space.")
+st.title("🖨️ Custom Label Generator (Safe Max Fill)")
+st.write("Updated margins to prevent cutoff while keeping text huge.")
 
 # === State Management ===
 if 'label_width' not in st.session_state:
@@ -50,7 +50,7 @@ with st.sidebar:
     
     # Maximize Text Option
     st.subheader("🔍 Layout Options")
-    maximize_text = st.checkbox("✨ Maximize Text (Fill Label)", value=True, help="Aggressively calculates font size to touch edges.")
+    maximize_text = st.checkbox("✨ Maximize Text (Fill Label)", value=True, help="Fills label safely without cutting off edges.")
 
     st.session_state.label_width = width_in
     st.session_state.label_height = height_in
@@ -80,6 +80,9 @@ if st.button("📄 Generate PDF"):
 
         draw_barcode = bool(barcode_val) and not maximize_text
         total_labels = st.session_state.batch_count
+        
+        # Variable to show final font size in success message
+        final_font_size = 0
 
         for label_idx in range(total_labels):
             if label_idx > 0:
@@ -112,23 +115,25 @@ if st.button("📄 Generate PDF"):
             # --- 2. Drawing Logic ---
             
             if maximize_text and final_lines:
-                # === AGGRESSIVE MAXIMIZE MODE ===
+                # === SAFE MAXIMIZE MODE ===
                 
-                # Very small margins to allow text to touch near edges
-                margin_x = 0.05 * inch 
-                margin_y = 0.05 * inch
+                # CRITICAL FIX: Increased horizontal margin to prevent cutoff
+                # Vertical margin kept small to allow text to grow tall
+                margin_x = 0.25 * inch  # Wider safe zone for left/right
+                margin_y = 0.05 * inch  # Tiny safe zone for top/bottom
+                
                 available_w = w - (2 * margin_x)
                 available_h = h - (2 * margin_y)
                 
                 # Binary Search for Perfect Font Size
                 low_font = 10.0
-                high_font = 500.0 # Start very high
+                high_font = 600.0 
                 best_font = 10.0
                 
-                while high_font - low_font > 0.5: # Precision of 0.5 pt
+                while high_font - low_font > 0.5:
                     test_font = (low_font + high_font) / 2
                     
-                    # Check Width
+                    # Check Width (Strict)
                     max_line_w = 0
                     for line in final_lines:
                         lw = stringWidth(line, 'Helvetica-Bold', test_font)
@@ -136,8 +141,6 @@ if st.button("📄 Generate PDF"):
                             max_line_w = lw
                     
                     # Check Height
-                    # ReportLab line height is roughly 1.2 * font_size for Helvetica
-                    # We use 1.18 to be slightly tighter
                     line_height = test_font * 1.18
                     total_h = len(final_lines) * line_height
                     
@@ -146,9 +149,11 @@ if st.button("📄 Generate PDF"):
                     
                     if fits_width and fits_height:
                         best_font = test_font
-                        low_font = test_font # Try bigger
+                        low_font = test_font 
                     else:
-                        high_font = test_font # Too big, go smaller
+                        high_font = test_font 
+
+                final_font_size = best_font
 
                 # Draw with calculated best_font
                 c.setFont("Helvetica-Bold", best_font)
@@ -156,7 +161,7 @@ if st.button("📄 Generate PDF"):
                 total_block_h = len(final_lines) * line_height
                 
                 # Center Vertically
-                start_y = (h - total_block_h) / 2 + (line_height * 0.75) # 0.75 adjusts baseline visually
+                start_y = (h - total_block_h) / 2 + (line_height * 0.75)
                 
                 for line in final_lines:
                     text_w = stringWidth(line, 'Helvetica-Bold', best_font)
@@ -195,7 +200,6 @@ if st.button("📄 Generate PDF"):
                         y_bc = max(0.7 * inch, y_position - 0.3 * inch)
                         renderPDF.draw(barcode_obj, c, x_bc, y_bc)
                         
-                        # Human readable
                         human_text = barcode_val
                         text_w = stringWidth(human_text, 'Helvetica-Bold', 14)
                         c.setFont("Helvetica-Bold", 14)
@@ -206,8 +210,9 @@ if st.button("📄 Generate PDF"):
         c.save()
         buffer.seek(0)
         
-        mode_str = "_MAXFILL_V2" if maximize_text else "_STD"
-        st.success(f"✅ Generated {total_labels} labels. Font size optimized to ~{best_font:.1f}pt" if maximize_text and final_lines else f"✅ Generated {total_labels} labels.")
+        mode_str = "_SAFE_MAX" if maximize_text else "_STD"
+        msg = f"✅ Generated {total_labels} labels. Optimized font: ~{final_font_size:.1f}pt (Safe Margins Applied)" if maximize_text and final_lines else f"✅ Generated {total_labels} labels."
+        st.success(msg)
         
         st.download_button(
             "⬇️ Download PDF",
