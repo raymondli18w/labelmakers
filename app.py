@@ -7,14 +7,14 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from io import BytesIO
 
 st.set_page_config(page_title="CustomLabel Generator", layout="wide")
-st.title("🖨️ Custom Label Generator")
-st.write("Create warehouse labels. Use 'Maximize Text' to fill the entire label with large, centered text.")
+st.title("🖨️ Custom Label Generator (Fixed Max Fill)")
+st.write("Updated logic to aggressively fill the label space.")
 
 # === State Management ===
 if 'label_width' not in st.session_state:
-    st.session_state.label_width = 4.0
+    st.session_state.label_width = 6.0
 if 'label_height' not in st.session_state:
-    st.session_state.label_height = 3.0
+    st.session_state.label_height = 4.0
 if 'batch_count' not in st.session_state:
     st.session_state.batch_count = 1
 
@@ -50,53 +50,35 @@ with st.sidebar:
     
     # Maximize Text Option
     st.subheader("🔍 Layout Options")
-    maximize_text = st.checkbox("✨ Maximize Text (Fill Label)", value=False, help="Calculates largest font size to fit text perfectly in the center. Hides barcode if enabled.")
+    maximize_text = st.checkbox("✨ Maximize Text (Fill Label)", value=True, help="Aggressively calculates font size to touch edges.")
 
     st.session_state.label_width = width_in
     st.session_state.label_height = height_in
     st.session_state.batch_count = batch
-
-    # Preview box
-    ratio = min(200 / max(width_in, height_in), 150)
-    preview_w = int(width_in * ratio)
-    preview_h = int(height_in * ratio)
-    preview_label = "MAX FILL" if maximize_text else "Standard"
-    st.markdown(f"### 🖼️ Preview ({width_in:.1f}″ × {height_in:.1f}″)")
-    st.markdown(
-        f'<div style="width:{preview_w}px; height:{preview_h}px; border:2px dashed #666; background:#f9f9f9; margin:10px 0; display:flex; align-items:center; justify-content:center; color:#aaa;">{preview_label}</div>',
-        unsafe_allow_html=True
-    )
 
 # === Main Form ===
 st.subheader("🔤 Label Content")
 col1, col2 = st.columns([2, 3])
 
 with col1:
-    barcode_val = st.text_input("📦 Barcode (Optional)", help="Leave blank to skip barcode. Note: Hidden if 'Maximize Text' is on.")
+    barcode_val = st.text_input("📦 Barcode (Optional)", help="Hidden if 'Maximize Text' is on.")
 with col2:
-    line1 = st.text_input("Line 1", value="18 Wheels")
-    line2 = st.text_input("Line 2", value="Re-sticker")
-    line3 = st.text_input("Line 3", value="Completed")
+    line1 = st.text_input("Line 1", value="UH")
+    line2 = st.text_input("Line 2", value="")
+    line3 = st.text_input("Line 3", value="")
     line4_base = st.text_input("Line 4 (Suffix)", value="")
 
 if st.button("📄 Generate PDF"):
-    # Validation
     has_text = any([line1, line2, line3, line4_base])
     if not barcode_val and not has_text:
-        st.warning("⚠️ Please enter either a barcode or at least one text line.")
+        st.warning("⚠️ Please enter text or barcode.")
     else:
         buffer = BytesIO()
         w = st.session_state.label_width * inch
         h = st.session_state.label_height * inch
         c = canvas.Canvas(buffer, pagesize=(w, h))
 
-        # Standard settings
-        STD_FONT_SIZE = 29
-        BARCODE_HUMAN_FONT_SIZE = 14
-        
-        # If maximizing, we force barcode off to prevent overlap issues
         draw_barcode = bool(barcode_val) and not maximize_text
-
         total_labels = st.session_state.batch_count
 
         for label_idx in range(total_labels):
@@ -110,12 +92,9 @@ if st.button("📄 Generate PDF"):
                 current_suffix = str(current_num)
 
             final_lines = []
-            if line1.strip():
-                final_lines.append(line1.strip())
-            if line2.strip():
-                final_lines.append(line2.strip())
-            if line3.strip():
-                final_lines.append(line3.strip())
+            if line1.strip(): final_lines.append(line1.strip())
+            if line2.strip(): final_lines.append(line2.strip())
+            if line3.strip(): final_lines.append(line3.strip())
             
             line4_content = line4_base.strip()
             if use_sequence:
@@ -127,57 +106,67 @@ if st.button("📄 Generate PDF"):
             if line4_content:
                 final_lines.append(line4_content)
 
+            if not final_lines and not draw_barcode:
+                continue
+
             # --- 2. Drawing Logic ---
             
             if maximize_text and final_lines:
-                # === MAXIMIZE MODE ===
-                # Margins (keep text slightly inside edges)
-                margin_x = 0.15 * inch
-                margin_y = 0.15 * inch
+                # === AGGRESSIVE MAXIMIZE MODE ===
+                
+                # Very small margins to allow text to touch near edges
+                margin_x = 0.05 * inch 
+                margin_y = 0.05 * inch
                 available_w = w - (2 * margin_x)
                 available_h = h - (2 * margin_y)
                 
-                # Find best font size
-                font_size = 200.0 
-                step_down = 10.0
-                best_font_size = 12.0
+                # Binary Search for Perfect Font Size
+                low_font = 10.0
+                high_font = 500.0 # Start very high
+                best_font = 10.0
                 
-                while font_size > 10:
-                    # Check Width (based on the longest line)
-                    max_line_width = 0
+                while high_font - low_font > 0.5: # Precision of 0.5 pt
+                    test_font = (low_font + high_font) / 2
+                    
+                    # Check Width
+                    max_line_w = 0
                     for line in final_lines:
-                        lw = stringWidth(line, 'Helvetica-Bold', font_size)
-                        if lw > max_line_width:
-                            max_line_width = lw
+                        lw = stringWidth(line, 'Helvetica-Bold', test_font)
+                        if lw > max_line_w:
+                            max_line_w = lw
                     
-                    # Check Height (approximate based on lines * line_height_factor)
-                    total_text_h = len(final_lines) * font_size * 1.15 
+                    # Check Height
+                    # ReportLab line height is roughly 1.2 * font_size for Helvetica
+                    # We use 1.18 to be slightly tighter
+                    line_height = test_font * 1.18
+                    total_h = len(final_lines) * line_height
                     
-                    if max_line_width <= available_w and total_text_h <= available_h:
-                        best_font_size = font_size
-                        font_size -= 1.0 # Fine tune
+                    fits_width = max_line_w <= available_w
+                    fits_height = total_h <= available_h
+                    
+                    if fits_width and fits_height:
+                        best_font = test_font
+                        low_font = test_font # Try bigger
                     else:
-                        font_size -= step_down
-                        
-                    if font_size < best_font_size - 20:
-                         step_down = 1.0
+                        high_font = test_font # Too big, go smaller
 
-                # Draw Centered
-                c.setFont("Helvetica-Bold", best_font_size)
-                
-                # Calculate total block height for vertical centering
-                line_height = best_font_size * 1.15
+                # Draw with calculated best_font
+                c.setFont("Helvetica-Bold", best_font)
+                line_height = best_font * 1.18
                 total_block_h = len(final_lines) * line_height
-                start_y = (h - total_block_h) / 2 + (line_height * 0.8)
+                
+                # Center Vertically
+                start_y = (h - total_block_h) / 2 + (line_height * 0.75) # 0.75 adjusts baseline visually
                 
                 for line in final_lines:
-                    text_w = stringWidth(line, 'Helvetica-Bold', best_font_size)
+                    text_w = stringWidth(line, 'Helvetica-Bold', best_font)
                     x_centered = (w - text_w) / 2
                     c.drawString(x_centered, start_y, line)
                     start_y -= line_height
 
             else:
                 # === STANDARD MODE ===
+                STD_FONT_SIZE = 29
                 y_position = h - 1.3 * inch
                 
                 if final_lines:
@@ -190,42 +179,35 @@ if st.button("📄 Generate PDF"):
                         c.drawString(x_centered, y_position, line)
                         y_position -= 0.68 * inch
 
-                # Draw Barcode
                 if draw_barcode:
                     try:
                         barcode_obj = createBarcodeDrawing(
-                            'Code128',
-                            value=barcode_val,
-                            barWidth=0.022 * inch,
-                            barHeight=0.6 * inch,
-                            humanReadable=False,
-                            quietZone=0.12 * inch
+                            'Code128', value=barcode_val,
+                            barWidth=0.022 * inch, barHeight=0.6 * inch,
+                            humanReadable=False, quietZone=0.12 * inch
                         )
-
                         MAX_BARCODE_WIDTH = w - 0.6 * inch
                         if barcode_obj.width > MAX_BARCODE_WIDTH:
                             scale = MAX_BARCODE_WIDTH / barcode_obj.width
                             barcode_obj.scale(scale, 1)
-                            barcode_obj.width = MAX_BARCODE_WIDTH
-
+                        
                         x_bc = (w - barcode_obj.width) / 2
                         y_bc = max(0.7 * inch, y_position - 0.3 * inch)
-
                         renderPDF.draw(barcode_obj, c, x_bc, y_bc)
-
+                        
+                        # Human readable
                         human_text = barcode_val
-                        text_w = stringWidth(human_text, 'Helvetica-Bold', BARCODE_HUMAN_FONT_SIZE)
-                        c.setFont("Helvetica-Bold", BARCODE_HUMAN_FONT_SIZE)
+                        text_w = stringWidth(human_text, 'Helvetica-Bold', 14)
+                        c.setFont("Helvetica-Bold", 14)
                         c.drawString((w - text_w) / 2, y_bc - 0.2 * inch, human_text)
-
                     except Exception as e:
                         st.error(f"Barcode error: {e}")
 
         c.save()
         buffer.seek(0)
-
-        mode_str = "_MAXFILL" if maximize_text else "_STD"
-        st.success(f"✅ Generated {total_labels} label(s) [{mode_str}] at {width_in:.1f}″ × {height_in:.1f}″")
+        
+        mode_str = "_MAXFILL_V2" if maximize_text else "_STD"
+        st.success(f"✅ Generated {total_labels} labels. Font size optimized to ~{best_font:.1f}pt" if maximize_text and final_lines else f"✅ Generated {total_labels} labels.")
         
         st.download_button(
             "⬇️ Download PDF",
